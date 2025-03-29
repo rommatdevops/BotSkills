@@ -5,6 +5,123 @@ FLUSH PRIVILEGES;
 
 
 
-ВИДАЛИТИ ВСЕ З ТАБЛИЦІ!!!!!!!!!!
+-------ВИДАЛИТИ ВСЕ З ТАБЛИЦІ!!!!!!!!!!
 TRUNCATE TABLE users;
 --------------------
+-----ПОЧИСТИТИ БАЗУ-----------
+DROP DATABASE telegram_bot_db;
+CREATE DATABASE telegram_bot_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+----------------------------
+
+🧪 Основні компоненти тестування:
+1. test_categories
+Категорії тестів (наприклад: “GCP Basics”, “Kubernetes”, “CI/CD Pipelines”)
+
+sql
+Copy
+Edit
+CREATE TABLE test_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT
+);
+2. tests
+Кожен окремий тест (наприклад, "GCP - рівень 1")
+
+sql
+Copy
+Edit
+CREATE TABLE tests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    category_id INT,
+    difficulty_level INT,
+    description TEXT,
+    FOREIGN KEY (category_id) REFERENCES test_categories(id)
+);
+3. questions
+Питання для тестів
+
+sql
+Copy
+Edit
+CREATE TABLE questions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    test_id INT,
+    question_text TEXT NOT NULL,
+    explanation TEXT,
+    FOREIGN KEY (test_id) REFERENCES tests(id)
+);
+4. answers
+Варіанти відповідей для кожного питання
+
+sql
+Copy
+Edit
+CREATE TABLE answers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question_id INT,
+    answer_text TEXT NOT NULL,
+    is_correct BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (question_id) REFERENCES questions(id)
+);
+5. user_test_sessions
+Сесія проходження тесту користувачем
+
+sql
+Copy
+Edit
+CREATE TABLE user_test_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    test_id INT,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    score INT,
+    is_passed BOOLEAN,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (test_id) REFERENCES tests(id)
+);
+6. user_answers
+Відповіді, які користувач вибрав під час тестування
+
+sql
+Copy
+Edit
+CREATE TABLE user_answers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT,
+    question_id INT,
+    answer_id INT,
+    is_correct BOOLEAN,
+    FOREIGN KEY (session_id) REFERENCES user_test_sessions(id),
+    FOREIGN KEY (question_id) REFERENCES questions(id),
+    FOREIGN KEY (answer_id) REFERENCES answers(id)
+);
+✅ Опціонально:
+7. test_rewards
+Бонусні бали/рівні/ачівки за проходження тестів
+
+sql
+Copy
+Edit
+CREATE TABLE test_rewards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    test_id INT,
+    branch_id INT,
+    points_awarded INT,
+    FOREIGN KEY (test_id) REFERENCES tests(id),
+    FOREIGN KEY (branch_id) REFERENCES skill_branches(id)
+);
+📊 Що можна:
+Прив'язати тести до гілок прокачки (CI/CD, Cloud, K8s…)
+
+Нараховувати бали до user_branch_progress
+
+Визначати слабкі гілки (де часто не проходять тести)
+
+Формувати профіль: “Ви пройшли 7 тестів у напрямку Kubernetes”
+
+
+
+

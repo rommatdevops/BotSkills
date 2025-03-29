@@ -1,11 +1,18 @@
+import random
 from telethon import TelegramClient, events, Button
 from config import API_ID, API_HASH, BOT_TOKEN
-from auth.auth import register_user, check_authorization, authorize_user
-from auth.models import Base
-from utils.database import engine
 from sqlalchemy import text
+from auth.auth import register_user, check_authorization, authorize_user
+from testing.test_logic import get_test_categories, get_random_question
+from testing.models import TestCategory, Test, Question, Answer  # ← додано імпорт моделей
+#---Імпорт бази-----
+from utils.base import Base
+from utils.database import engine, SessionLocal
 
+#-------------------
 Base.metadata.create_all(engine)
+
+
 
 bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
@@ -15,7 +22,8 @@ WELCOME_TEXT = (
     "Щоб почати, натисніть /start"
 )
 
-MENU_BUTTON = [
+MAIN_MENU_BUTTONS = [
+    [Button.text("🧪 Тестування", resize=True)],
     [Button.text("📌 Очікуйте оновлень", resize=True)]
 ]
 
@@ -39,7 +47,7 @@ async def start(event):
     if result:
         await event.reply(
             "🔹 Ви вже зареєстровані! Оберіть пункт із меню.",
-            buttons=MENU_BUTTON
+            buttons=MAIN_MENU_BUTTONS
         )
     else:
         await event.reply(
@@ -58,10 +66,10 @@ async def register(event):
         authorize_user(telegram_id)  # Встановлюємо is_authorized=True
         await event.reply(
             "✅ Ви успішно зареєстровані! Дякую, що приєдналися.",
-            buttons=MENU_BUTTON
+            buttons=MAIN_MENU_BUTTONS
         )
     else:
-        await event.reply("🔹 Ви вже зареєстровані.", buttons=MENU_BUTTON)
+        await event.reply("🔹 Ви вже зареєстровані.", buttons=MAIN_MENU_BUTTONS)
 
 @bot.on(events.NewMessage(pattern='❌ Відмовитися'))
 async def decline_registration(event):
@@ -71,10 +79,41 @@ async def decline_registration(event):
 async def updates(event):
     await event.reply("🕑 Незабаром тут з'являться нові можливості. Слідкуйте за оновленнями!")
 
-@bot.on(events.NewMessage(func=lambda e: e.is_private and e.text != '/start' 
-                          and e.text not in ['✅ Зареєструватися', '❌ Відмовитися', '📌 Очікуйте оновлень']))
-async def greet_if_first_time(event):
-    await event.reply(WELCOME_TEXT)
+# @bot.on(events.NewMessage(func=lambda e: e.is_private and e.text != '/start' 
+#                           and e.text not in ['✅ Зареєструватися', '❌ Відмовитися', '📌 Очікуйте оновлень']))
+# async def greet_if_first_time(event):
+#     await event.reply(WELCOME_TEXT)
+
+@bot.on(events.NewMessage(pattern='🧪 Тестування'))
+async def testing_menu(event):
+    categories = get_test_categories()
+    if not categories:
+        await event.reply("😕 Наразі немає жодного доступного тесту.")
+        return
+    
+    buttons = [[Button.text(cat.name, resize=True)] for cat in categories]
+    await event.reply("📚 Оберіть тему для тестування:", buttons=buttons)
+
+@bot.on(events.NewMessage)
+async def handle_category_selection(event):
+    session = SessionLocal()
+    category = session.query(TestCategory).filter(TestCategory.name == event.text).first()
+    if category:
+        tests = session.query(Test).filter(Test.category_id == category.id).all()
+        if not tests:
+            await event.reply("😕 В обраній темі немає тестів.")
+            session.close()
+            return
+        
+        test = random.choice(tests)
+        question = get_random_question(test.id)
+        if question:
+            buttons = [[Button.text(ans.answer_text, resize=True)] for ans in question.answers]
+            await event.reply(f"❓ {question.question_text}", buttons=buttons)
+        else:
+            await event.reply("😕 В тесті немає питань.")
+    session.close()
+
 
 def main():
     print("🤖 Бот запущений...")
