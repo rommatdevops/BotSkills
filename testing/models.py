@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
 from utils.base import Base
+from sqlalchemy.sql import func
 
 class TestCategory(Base):
     __tablename__ = 'test_categories'
@@ -10,14 +11,17 @@ class TestCategory(Base):
     tests = relationship("Test", back_populates="category")
 
 class Test(Base):
-    __tablename__ = 'tests'
+    __tablename__ = "tests"
+
     id = Column(Integer, primary_key=True)
     title = Column(String(100), nullable=False)
-    category_id = Column(Integer, ForeignKey('test_categories.id'))
+    category_id = Column(Integer, ForeignKey("test_categories.id"))
     difficulty_level = Column(Integer)
-    description = Column(Text)
-    category = relationship("TestCategory", back_populates="tests")
-    questions = relationship("Question", back_populates="test")
+    description = Column(String(255))
+
+    category = relationship("TestCategory", back_populates="tests")  # ⬅️ оце було відсутнє
+    questions = relationship("Question", back_populates="test")      # ⬅️ рекомендовано додати
+    user_sessions = relationship("UserTestSession", back_populates="test")
 
 class Question(Base):
     __tablename__ = 'questions'
@@ -37,14 +41,21 @@ class Answer(Base):
     question = relationship("Question", back_populates="answers")  # ← і цей рядок додано
 
 class UserTestSession(Base):
-    __tablename__ = 'user_test_sessions'
+    __tablename__ = "user_test_sessions"
+
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    test_id = Column(Integer, ForeignKey('tests.id'))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    test_id = Column(Integer, ForeignKey("tests.id"), nullable=False)
+
     started_at = Column(DateTime, default=func.now())
-    completed_at = Column(DateTime)
-    score = Column(Integer)
-    is_passed = Column(Boolean)
+    completed_at = Column(DateTime, nullable=True)
+
+    score = Column(Integer, nullable=True)  # Відсоток правильних
+    is_passed = Column(Boolean, default=False)
+
+    # Зв’язки (опціонально, якщо потрібно зручніше працювати)
+    user = relationship("User", back_populates="test_sessions")
+    test = relationship("Test", back_populates="user_sessions")
 
 class UserAnswer(Base):
     __tablename__ = 'user_answers'

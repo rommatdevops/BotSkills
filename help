@@ -98,6 +98,7 @@ CREATE TABLE user_answers (
     FOREIGN KEY (question_id) REFERENCES questions(id),
     FOREIGN KEY (answer_id) REFERENCES answers(id)
 );
+
 ✅ Опціонально:
 7. test_rewards
 Бонусні бали/рівні/ачівки за проходження тестів
