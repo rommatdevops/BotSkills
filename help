@@ -1,0 +1,10 @@
+CREATE DATABASE telegram_bot_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+    GRANT ALL PRIVILEGES ON telegram_bot_db.* TO 'користувач_mysql'@'localhost';
+FLUSH PRIVILEGES;
+
+
+
+ВИДАЛИТИ ВСЕ З ТАБЛИЦІ!!!!!!!!!!
+TRUNCATE TABLE users;
+--------------------
