@@ -96,6 +96,10 @@ async def testing_menu(event):
 
 @bot.on(events.NewMessage)
 async def handle_category_selection(event):
+    if event.text == '🛑 Завершити тест':
+        # Цю ситуацію обробить обробник finish_test
+        return
+        
     session = SessionLocal()
     category = session.query(TestCategory).filter(TestCategory.name == event.text).first()
     if category:
@@ -108,12 +112,200 @@ async def handle_category_selection(event):
         test = random.choice(tests)
         question = get_random_question(test.id)
         if question:
-            buttons = [[Button.text(ans.answer_text, resize=True)] for ans in question.answers]
+            # Змінюємо меню на кнопку "Завершити тест"
+            await bot.send_message(
+                event.chat_id,
+                "Для завершення тесту натисніть кнопку нижче:",
+                buttons=[[Button.text("🛑 Завершити тест", resize=True)]]
+            )
+            
+            # Створюємо інлайн-кнопки для відповідей
+            buttons = [
+                [Button.inline(ans.answer_text, data=f"answer_{ans.id}")]
+                for ans in question.answers
+            ]
+            
             await event.reply(f"❓ {question.question_text}", buttons=buttons)
         else:
             await event.reply("😕 В тесті немає питань.")
     session.close()
 
+@bot.on(events.CallbackQuery(pattern=r"answer_(\d+)"))
+async def handle_answer(event):
+    answer_id = int(event.data.decode('utf-8').split('_')[1])
+    
+    session = SessionLocal()
+    answer = session.query(Answer).filter(Answer.id == answer_id).first()
+    
+    if answer:
+        if answer.is_correct:
+            await event.answer("✅ Правильно!")  # Показує спливаюче повідомлення
+            await bot.send_message(
+                event.chat_id,
+                f"✅ Правильно! {answer.answer_text}",
+            )
+        else:
+            correct_answer = session.query(Answer).filter(
+                Answer.question_id == answer.question_id,
+                Answer.is_correct == True
+            ).first()
+            
+            correct_text = correct_answer.answer_text if correct_answer else "Не знайдено"
+            
+            await event.answer("❌ Неправильно")  # Показує спливаюче повідомлення
+            await bot.send_message(
+                event.chat_id,
+                f"❌ Неправильно. Ви обрали: {answer.answer_text}\n"
+                f"Правильна відповідь: {correct_text}",
+            )
+        
+        # Додаємо кнопку для наступного питання
+        await bot.send_message(
+            event.chat_id,
+            "Бажаєте продовжити?",
+            buttons=[Button.inline("Наступне питання", data="next_question")]
+        )
+    
+    session.close()
+
+@bot.on(events.CallbackQuery(pattern=r"next_question"))
+async def handle_next_question(event):
+    # Видаляємо попереднє повідомлення з кнопкою "Наступне питання"
+    await event.delete()
+    
+    # Отримуємо список категорій для тестування
+    categories = get_test_categories()
+    
+    # Створюємо інлайн-кнопки для кожної категорії
+    category_buttons = [
+        [Button.inline(cat.name, data=f"category_{cat.id}")]
+        for cat in categories
+    ]
+    
+    # Додаємо кнопку "На головну"
+    category_buttons.append([Button.inline("🏠 На головну", data="go_home")])
+    
+    # Відправляємо нове повідомлення з запрошенням вибрати тему
+    await bot.send_message(
+        event.chat_id,
+        "📚 Виберіть з меню тему для тестування:",
+        buttons=category_buttons
+    )
+
+# Додаємо обробник для кнопки "На головну"
+@bot.on(events.CallbackQuery(pattern=r"go_home"))
+async def go_home(event):
+    await event.delete()  # Видаляємо повідомлення з меню вибору теми
+    
+    # Відправляємо головне меню
+    await bot.send_message(
+        event.chat_id,
+        "🔹 Ви повернулися до головного меню. Оберіть пункт із меню.",
+        buttons=MAIN_MENU_BUTTONS
+    )
+
+# Додаємо обробник для вибору категорії через інлайн-кнопки
+@bot.on(events.CallbackQuery(pattern=r"category_(\d+)"))
+async def handle_category_inline_selection(event):
+    # Отримуємо id категорії з callback_data
+    category_id = int(event.data.decode('utf-8').split('_')[1])
+    
+    session = SessionLocal()
+    category = session.query(TestCategory).filter(TestCategory.id == category_id).first()
+    
+    if category:
+        tests = session.query(Test).filter(Test.category_id == category.id).all()
+        if not tests:
+            await event.answer("😕 В обраній темі немає тестів.")
+            session.close()
+            return
+        
+        test = random.choice(tests)
+        question = get_random_question(test.id)
+        
+        if question:
+            # Видаляємо повідомлення з вибором категорії
+            await event.delete()
+            
+            # Створюємо інлайн-кнопки для варіантів відповідей
+            buttons = [
+                [Button.inline(ans.answer_text, data=f"answer_{ans.id}")]
+                for ans in question.answers
+            ]
+            
+            # Відправляємо нове повідомлення з питанням та варіантами відповідей
+            await bot.send_message(
+                event.chat_id,
+                f"❓ {question.question_text}",
+                buttons=buttons
+            )
+        else:
+            await event.answer("😕 В тесті немає питань.")
+    else:
+        await event.answer("😕 Категорію не знайдено.")
+    
+    session.close()
+
+# Додаємо обробник для кнопки "Завершити тест"
+@bot.on(events.NewMessage(pattern='🛑 Завершити тест'))
+async def finish_test(event):
+    # Повертаємо користувача до меню тестування
+    categories = get_test_categories()
+    
+    if not categories:
+        await event.reply("😕 Наразі немає жодного доступного тесту.")
+        return
+    
+    buttons = [[Button.text(cat.name, resize=True)] for cat in categories]
+    await event.reply("📚 Оберіть тему для тестування:", buttons=buttons)
+
+@bot.on(events.CallbackQuery(pattern=r"category_(\d+)"))
+async def handle_category_inline_selection(event):
+    # Отримуємо id категорії з callback_data
+    category_id = int(event.data.decode('utf-8').split('_')[1])
+    
+    session = SessionLocal()
+    category = session.query(TestCategory).filter(TestCategory.id == category_id).first()
+    
+    if category:
+        tests = session.query(Test).filter(Test.category_id == category.id).all()
+        if not tests:
+            await event.answer("😕 В обраній темі немає тестів.")
+            session.close()
+            return
+        
+        test = random.choice(tests)
+        question = get_random_question(test.id)
+        
+        if question:
+            # Видаляємо повідомлення з вибором категорії
+            await event.delete()
+            
+            # Створюємо інлайн-кнопки для варіантів відповідей
+            buttons = [
+                [Button.inline(ans.answer_text, data=f"answer_{ans.id}")]
+                for ans in question.answers
+            ]
+            
+            # Змінюємо меню на кнопку "Завершити тест"
+            await bot.send_message(
+                event.chat_id,
+                "Для завершення тесту натисніть кнопку нижче:",
+                buttons=[[Button.text("🛑 Завершити тест", resize=True)]]
+            )
+            
+            # Відправляємо нове повідомлення з питанням та варіантами відповідей
+            await bot.send_message(
+                event.chat_id,
+                f"❓ {question.question_text}",
+                buttons=buttons
+            )
+        else:
+            await event.answer("😕 В тесті немає питань.")
+    else:
+        await event.answer("😕 Категорію не знайдено.")
+    
+    session.close()
 
 def main():
     print("🤖 Бот запущений...")
