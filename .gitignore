@@ -1,7 +1,8 @@
 .env
 db_inserter.py
 bot_session.session
-help
+help*
 bot_session.*
 1.py
 *.session
+*help*

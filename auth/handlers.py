@@ -23,6 +23,7 @@ async def setup_auth_handlers(bot_client):
                 "🔹 Ви вже зареєстровані! Оберіть пункт із меню.",
                 buttons=[
                     [Button.text("🧪 Тестування", resize=True)],
+                    [Button.text("📈 Мій прогрес", resize=True)],
                     [Button.text("📌 Очікуйте оновлень", resize=True)]
                 ]
             )
@@ -48,6 +49,7 @@ async def setup_auth_handlers(bot_client):
                 "✅ Ви успішно зареєстровані! Дякую, що приєдналися.",
                 buttons=[
                     [Button.text("🧪 Тестування", resize=True)],
+                    [Button.text("📈 Мій прогрес", resize=True)],
                     [Button.text("📌 Очікуйте оновлень", resize=True)]
                 ]
             )
@@ -56,6 +58,7 @@ async def setup_auth_handlers(bot_client):
                 "🔹 Ви вже зареєстровані.",
                 buttons=[
                     [Button.text("🧪 Тестування", resize=True)],
+                    [Button.text("📈 Мій прогрес", resize=True)],
                     [Button.text("📌 Очікуйте оновлень", resize=True)]
                 ]
             )
