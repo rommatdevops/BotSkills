@@ -12,18 +12,85 @@ MAX_QUESTIONS_PER_TEST = 3
 async def setup_testing_handlers(bot_client):
     @bot_client.on(events.NewMessage(pattern='🧪 Тестування'))
     async def testing_menu(event):
-        categories = get_test_categories()
-        if not categories:
-            await event.reply("😕 Наразі немає жодного доступного тесту.")
+        session = SessionLocal()
+        parent_categories = session.query(TestCategory).filter(TestCategory.parent_id == None).all()
+        session.close()
+
+        if not parent_categories:
+            await event.reply("😕 Наразі немає доступних напрямків.")
             return
-        # Використовуємо inline кнопки, щоб при натисканні одразу відправляти callback_data
-        buttons = [[Button.inline(cat.name, data=f"category_{cat.id}")] for cat in categories]
-        await event.reply("📚 Оберіть тему для тестування:", buttons=buttons)
+
+        buttons = [[Button.inline(cat.name, data=f"direction_{cat.id}")] for cat in parent_categories]
+        await event.reply("🧭 Оберіть напрямок:", buttons=buttons)
+
+
+    @bot_client.on(events.CallbackQuery(pattern=r"^direction_(\d+)$"))
+    async def handle_direction_selection(event):
+        direction_id = int(event.data.decode('utf-8').split('_')[1])
+
+        session = SessionLocal()
+        subcategories = session.query(TestCategory).filter(TestCategory.parent_id == direction_id).all()
+        direction = session.query(TestCategory).filter(TestCategory.id == direction_id).first()
+        session.close()
+
+        if not subcategories:
+            await event.answer("❌ Підкатегорій не знайдено.")
+            return
+
+        await event.delete()
+        buttons = [[Button.inline(cat.name, data=f"category_{cat.id}")] for cat in subcategories]
+        buttons.append([Button.inline("🔙 Назад", data="go_back_to_directions")])
+        await bot_client.send_message(
+            event.chat_id,
+            f"🔹 Напрямок: *{direction.name}*\nОберіть підкатегорію:",
+            buttons=buttons,
+            parse_mode='markdown'
+        )
+
+    @bot_client.on(events.CallbackQuery(pattern=r"^cat_(\d+)$"))
+    async def handle_subcategory_or_tests(event):
+        category_id = int(event.data.decode('utf-8').split('_')[1])
+        session = SessionLocal()
+        category = session.query(TestCategory).filter(TestCategory.id == category_id).first()
+
+        if not category:
+            await event.answer("❌ Категорію не знайдено.")
+            session.close()
+            return
+
+        subcategories = category.subcategories
+        if subcategories:
+            # Показати підкатегорії
+            buttons = [[Button.inline(sub.name, data=f"cat_{sub.id}")] for sub in subcategories]
+            buttons.append([Button.inline("🔙 Назад", data="go_back_to_categories")])
+            await event.edit(f"📂 Підкатегорії теми *{category.name}*", buttons=buttons, parse_mode='markdown')
+        else:
+            # Показати тести цієї категорії
+            tests = category.tests
+            if not tests:
+                await event.answer("😕 У цій категорії поки немає тестів.")
+                session.close()
+                return
+
+            buttons = [[Button.inline(test.title, data=f"test_{test.id}")] for test in tests]
+            buttons.append([Button.inline("🔙 Назад", data="go_back_to_categories")])
+            await event.edit(f"🧪 Тести з теми *{category.name}*", buttons=buttons, parse_mode='markdown')
+
+        session.close()
+
+
+    @bot_client.on(events.CallbackQuery(pattern="go_back_to_categories"))
+    async def handle_back_to_root_categories(event):
+        session = SessionLocal()
+        top_categories = session.query(TestCategory).filter(TestCategory.parent_id == None).all()
+        session.close()
+
+        buttons = [[Button.inline(cat.name, data=f"cat_{cat.id}")] for cat in top_categories]
+        await event.edit("📚 Оберіть напрямок:", buttons=buttons)
 
     @bot_client.on(events.CallbackQuery(pattern=r"^category_(\d+)$"))
     async def handle_category_selection(event):
         category_id = int(event.data.decode('utf-8').split('_')[1])
-        
         session = SessionLocal()
         category = session.query(TestCategory).filter(TestCategory.id == category_id).first()
         session.close()
@@ -33,64 +100,33 @@ async def setup_testing_handlers(bot_client):
             return
 
         await event.delete()
-
-        # Зберігаємо category_id в data для callback (наприклад, starttest_5)
         buttons = [
             [Button.inline("✅ Розпочати тестування", data=f"starttest_{category.id}")],
-            [Button.inline("🔙 Повернутись назад", data="go_back_to_categories")]
+            [Button.inline("🔙 Повернутись назад", data=f"direction_{category.parent_id}")]
         ]
-
         await bot_client.send_message(
             event.chat_id,
-            f"📚 Ви обрали категорію: **{category.name}**\n\nГотові почати тест?",
+            f"📚 Ви обрали тему: *{category.name}*\nГотові почати тест?",
             buttons=buttons,
             parse_mode='markdown'
         )
 
-    @bot_client.on(events.CallbackQuery(pattern=r"^go_back_to_categories$"))
-    async def go_back_to_categories(event):
+    @bot_client.on(events.CallbackQuery(pattern=r"^go_back_to_directions$"))
+    async def go_back_to_directions(event):
+        session = SessionLocal()
+        parent_categories = session.query(TestCategory).filter(TestCategory.parent_id == None).all()
+        session.close()
+
+        buttons = [[Button.inline(cat.name, data=f"direction_{cat.id}")] for cat in parent_categories]
         await event.delete()
-
-        categories = get_test_categories()
-        if not categories:
-            await bot_client.send_message(event.chat_id, "😕 Наразі немає жодного доступного тесту.")
-            return
-
-        buttons = [[Button.inline(cat.name, data=f"category_{cat.id}")] for cat in categories]
-        await bot_client.send_message(event.chat_id, "📚 Оберіть тему для тестування:", buttons=buttons)
+        await bot_client.send_message(
+            event.chat_id,
+            "🧭 Оберіть напрямок:",
+            buttons=buttons
+        )
 
 
-    # @bot_client.on(events.CallbackQuery(pattern=r"^category_(\d+)$"))
-    # async def handle_category_inline_selection(event):
-    #     # Отримуємо id категорії з callback_data
-    #     category_id = int(event.data.decode('utf-8').split('_')[1])
-    #     session = SessionLocal()
-    #     category = session.query(TestCategory).filter(TestCategory.id == category_id).first()
-    #     if category:
-    #         tests = session.query(Test).filter(Test.category_id == category.id).all()
-    #         if not tests:
-    #             await event.answer("😕 В обраній темі немає тестів.")
-    #             session.close()
-    #             return
-    #         test = random.choice(tests)
-    #         question = get_random_question(test.id)
-    #         if question:
-    #             await event.delete()  # Видаляємо повідомлення з вибором категорії
-    #             # Створюємо inline кнопки для кожного варіанту відповіді
-    #             buttons = [
-    #                 [Button.inline(ans.answer_text, data=f"answer_{ans.id}")]
-    #                 for ans in question.answers
-    #             ]
-    #             await bot_client.send_message(
-    #                 event.chat_id,
-    #                 f"❓ {question.question_text}",
-    #                 buttons=buttons
-    #             )
-    #         else:
-    #             await event.answer("😕 В тесті немає питань.")
-    #     else:
-    #         await event.answer("😕 Категорію не знайдено.")
-    #     session.close()
+
     
     @bot_client.on(events.CallbackQuery(pattern=r"^answer_(\d+)$"))
     async def handle_answer(event):

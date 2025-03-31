@@ -8,7 +8,11 @@ class TestCategory(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
+    parent_id = Column(Integer, ForeignKey('test_categories.id'), nullable=True)
+
+    parent = relationship("TestCategory", remote_side=[id], backref="subcategories")
     tests = relationship("Test", back_populates="category")
+
 
 class Test(Base):
     __tablename__ = "tests"
@@ -19,9 +23,9 @@ class Test(Base):
     difficulty_level = Column(Integer)
     description = Column(String(255))
 
-    category = relationship("TestCategory", back_populates="tests")  # ⬅️ оце було відсутнє
-    questions = relationship("Question", back_populates="test")      # ⬅️ рекомендовано додати
+    category = relationship("TestCategory", back_populates="tests")
     user_sessions = relationship("UserTestSession", back_populates="test")
+    questions = relationship("Question", back_populates="test")
 
 class Question(Base):
     __tablename__ = 'questions'
