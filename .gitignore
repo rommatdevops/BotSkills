@@ -6,4 +6,4 @@ bot_session.*
 1.py
 *.session
 *help*
-*__pycache*
+**/__pycache__/
