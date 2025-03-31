@@ -5,3 +5,4 @@ help
 bot_session.*
 1.py
 *.session
+db_inserter.py
